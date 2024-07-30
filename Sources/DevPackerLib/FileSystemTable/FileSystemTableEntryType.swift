@@ -25,6 +25,13 @@ public enum FileSystemTableEntryType {
     case DeletedFile
     case Unknown(UInt8)
     
+    /// Converts the value of the current
+    /// `FileSystemTableEntryType`
+    /// instance to a numeric value.
+    ///
+    /// - Returns:The numeric value of the current
+    /// `FileSystemTableEntryType`
+    /// instance as an unsigned 8-bit integer.
     var Value: UInt8 {
         switch self {
         case .Folder:
