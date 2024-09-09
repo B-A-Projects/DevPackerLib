@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct TicketSecondarySubheader: Codable {
+public struct TicketSecondaryHeaderEntry: Codable {
     
     var dataOffset: UInt32
     
@@ -24,15 +24,19 @@ public struct TicketSecondarySubheader: Codable {
     var data: [[UInt8]]
     
     public init(File reader: Reader, SecondaryHeaderOffset offset: UInt64) throws {
-        dataOffset = try reader.readUnsignedInt(Offset: nil, IsPeek: false)
-        dataChunkCount = try reader.readUnsignedInt(Offset: nil, IsPeek: false)
-        dataChunkSize = try reader.readUnsignedInt(Offset: nil, IsPeek: false)
-        entrySize = try reader.readUnsignedInt(Offset: nil, IsPeek: false)
-        entryType = try reader.readUnsignedShort(Offset: nil, IsPeek: false)
-        flags = try reader.readUnsignedShort(Offset: nil, IsPeek: false)
+        dataOffset = try reader.readInteger()
+        dataChunkCount = try reader.readInteger()
+        dataChunkSize = try reader.readInteger()
+        entrySize = try reader.readInteger()
+        entryType = try reader.readInteger()
+        flags = try reader.readInteger()
         
         data = []
-        for chunk in 0...dataChunkCount {
+        guard dataChunkCount > 0 else {
+            return
+        }
+        
+        for chunk in 0...dataChunkCount - 1 {
             data[Int(chunk)] = try reader.readUnsignedByteArray(
                 ByteCountToRead: UInt64(dataChunkSize),
                 Offset: offset + UInt64(dataOffset) + UInt64(chunk * entrySize),

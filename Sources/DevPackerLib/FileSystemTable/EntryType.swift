@@ -18,7 +18,7 @@ import Foundation
 /// Any value that does not conform to this
 /// type selection is given the **unknown**
 /// file type instead.
-public enum FileSystemTableEntryType {
+public enum FileSystemTableEntryType: Codable {
     case Folder
     case File
     case DeletedFolder
@@ -32,15 +32,15 @@ public enum FileSystemTableEntryType {
     /// - Returns:The numeric value of the current
     /// `FileSystemTableEntryType`
     /// instance as an unsigned 8-bit integer.
-    var Value: UInt8 {
+    public var Value: UInt8 {
         switch self {
-        case .Folder:
-            return 0x00
         case .File:
+            return 0x00
+        case .Folder:
             return 0x01
-        case .DeletedFolder:
-            return 0x80
         case .DeletedFile:
+            return 0x80
+        case .DeletedFolder:
             return 0x81
         case .Unknown(let value):
             return value
@@ -67,13 +67,13 @@ public enum FileSystemTableEntryType {
     static func Parse(Value value: UInt8) -> FileSystemTableEntryType {
         switch value {
         case 0x00:
-            return .Folder
-        case 0x01:
             return .File
+        case 0x01:
+            return .Folder
         case 0x80:
-            return .DeletedFolder
-        case 0x81:
             return .DeletedFile
+        case 0x81:
+            return .DeletedFolder
         default:
             return .Unknown(value)
         }

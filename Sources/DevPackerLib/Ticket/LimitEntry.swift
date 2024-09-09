@@ -14,7 +14,7 @@ public struct TicketLimitEntry: Codable {
     var limitSize: UInt32
     
     public init(File reader: Reader) throws {
-        limitType = TicketLimitType.Parse(Value: try reader.readUnsignedInt(Offset: nil, IsPeek: false))
-        limitSize = try reader.readUnsignedInt(Offset: nil, IsPeek: false)
+        limitType = TicketLimitType.Parse(Value: try reader.readInteger())
+        limitSize = try reader.readInteger()
     }
 }

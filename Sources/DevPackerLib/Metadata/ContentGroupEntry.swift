@@ -30,7 +30,7 @@ public struct MetadataContentGroupEntry: Codable {
     var chunkHash: [UInt8]
     
     init (File fileHandle: Reader) throws {
-        chunkCount = try fileHandle.readUnsignedInt(Offset: nil, IsPeek: false)
-        chunkHash = try fileHandle.readUnsignedByteArray(ByteCountToRead: 0x20, Offset: nil, IsPeek: false)
+        chunkCount = try fileHandle.readInteger()
+        chunkHash = try fileHandle.readUnsignedByteArray(ByteCountToRead: 0x20)
     }
 }

@@ -26,7 +26,7 @@ public struct Signature: Codable {
     var signer: String
     
     public init (File fileHandle: Reader) throws {
-        signatureType = SignatureType.Parse(Value: try fileHandle.readUnsignedInt(Offset: nil, IsPeek: false))
+        signatureType = SignatureType.Parse(Value: try fileHandle.readInteger(ByteOrder: .LittleEndian, Offset: nil, IsPeek: false))
         signature = try fileHandle.readUnsignedByteArray(ByteCountToRead: 0x100, Offset: nil, IsPeek: false)
         
         try fileHandle.seek(Offset: fileHandle.offset + 0x3C);

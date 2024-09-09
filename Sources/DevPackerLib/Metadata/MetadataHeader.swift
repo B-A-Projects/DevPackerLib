@@ -62,21 +62,23 @@ public struct MetadataHeader: Codable {
     var contentEntryTableHash: [UInt8]
     
     init (File fileHandle: Reader) throws {
-        metadataVersion = try fileHandle.readUnsignedByte(Offset: nil, IsPeek: false)
-        certificateAuthorityCrlVersion = try fileHandle.readUnsignedByte(Offset: nil, IsPeek: false)
-        signerCrlVersion = try fileHandle.readUnsignedByte(Offset: nil, IsPeek: false)
-        isVirtualWiiTitle = try fileHandle.readBool(Offset: nil, IsPeek: false)
-        systemVersion = try fileHandle.readUnsignedLong(Offset: nil, IsPeek: false)
-        id = try fileHandle.readUnsignedLong(Offset: nil, IsPeek: false)
-        titleType = MetadataTitleType.Parse(Value: try fileHandle.readUnsignedInt(Offset: nil, IsPeek: false))
-        groupId = try fileHandle.readUnsignedShort(Offset: nil, IsPeek: false)
-        region = MetadataRegion.Parse(Value: try fileHandle.readUnsignedShort(Offset: fileHandle.offset + 0x2, IsPeek: false))
-        ratings = try fileHandle.readUnsignedByteArray(ByteCountToRead: 0x10, Offset: nil, IsPeek: false)
-        ipcMask = try fileHandle.readUnsignedByteArray(ByteCountToRead: 0xC, Offset: fileHandle.offset + 0xC, IsPeek: false)
-        accessRights = try fileHandle.readUnsignedInt(Offset: fileHandle.offset + 0x12, IsPeek: false)
-        titleVersion = try fileHandle.readUnsignedShort(Offset: nil, IsPeek: false)
-        contentChunkCount = try fileHandle.readUnsignedShort(Offset: nil, IsPeek: false)
-        bootIndex = try fileHandle.readUnsignedShort(Offset: nil, IsPeek: false)
-        contentEntryTableHash = try fileHandle.readUnsignedByteArray(ByteCountToRead: 0x20, Offset: fileHandle.offset + 0x2, IsPeek: false)
+        metadataVersion = try fileHandle.readInteger()
+        certificateAuthorityCrlVersion = try fileHandle.readInteger()
+        signerCrlVersion = try fileHandle.readInteger()
+        isVirtualWiiTitle = try fileHandle.readBool()
+        systemVersion = try fileHandle.readInteger()
+        id = try fileHandle.readInteger()
+        titleType = MetadataTitleType.Parse(Value: try fileHandle.readInteger())
+        groupId = try fileHandle.readInteger()
+        region = MetadataRegion.Parse(Value: try fileHandle.readInteger(Offset: fileHandle.offset + 0x2))
+        ratings = try fileHandle.readUnsignedByteArray(ByteCountToRead: 0x10)
+        ipcMask = try fileHandle.readUnsignedByteArray(ByteCountToRead: 0xC, 
+                                                       Offset: fileHandle.offset + 0xC)
+        accessRights = try fileHandle.readInteger(Offset: fileHandle.offset + 0x12)
+        titleVersion = try fileHandle.readInteger()
+        contentChunkCount = try fileHandle.readInteger()
+        bootIndex = try fileHandle.readInteger()
+        contentEntryTableHash = try fileHandle.readUnsignedByteArray(ByteCountToRead: 0x20, 
+                                                                     Offset: fileHandle.offset + 0x2)
     }
 }
