@@ -19,7 +19,7 @@ public struct TicketPrimaryHeader: Codable {
     
     var consoleId: UInt32
     
-    var titleId: UInt64
+    var titleId: [UInt8]
     
     var titleVersion: UInt16
     
@@ -41,7 +41,7 @@ public struct TicketPrimaryHeader: Codable {
         titleKey = try reader.readUnsignedByteArray(ByteCountToRead: 0x10, Offset: reader.offset + 0x2)
         ticketId = try reader.readInteger(Offset: reader.offset + 0x1)
         consoleId = try reader.readInteger()
-        titleId = try reader.readInteger()
+        titleId = try reader.readUnsignedByteArray(ByteCountToRead: 0x8)
         titleVersion = try reader.readInteger(Offset: reader.offset + 0x2)
         titleMaskResult = try reader.readInteger()
         titleMask = try reader.readInteger()

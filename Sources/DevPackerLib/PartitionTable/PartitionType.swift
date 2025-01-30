@@ -45,4 +45,33 @@ public enum PartitionType: Codable {
             return .Unknown(value)
         }
     }
+    
+    /// Returns the type of the partition,
+    /// based on the identifier provided in `value`.
+    ///
+    /// This function will result in one of three results, depending
+    /// on the provided input. Possible results are:
+    /// - **`SI`**: Represents Japan
+    /// - **`UP`**: Represents America
+    /// - **`GM`**: Represents Europe & Oceania
+    ///
+    /// Any other value will result in
+    /// `PartitionType.Unknown`
+    ///
+    /// - Parameters:
+    ///     - Value: The value of which to determine the region.
+    ///
+    /// - Returns: The `PartitionType` value for `value`.
+    public var Value: String {
+        switch self {
+        case .System:
+            return "SI"
+        case .Update:
+            return "UP"
+        case .Game:
+            return "GM"
+        case .Unknown(let value):
+            return value
+        }
+    }
 }

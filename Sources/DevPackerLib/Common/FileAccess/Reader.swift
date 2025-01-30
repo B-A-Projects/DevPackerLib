@@ -13,6 +13,7 @@ public protocol Reader {
     func readInteger<T: FixedWidthInteger>(ByteOrder byteOrder: Endianness, Offset offset: UInt64?, IsPeek peek: Bool) throws -> T
     func readBool(Offset offset: UInt64?, IsPeek peek: Bool) throws -> Bool
     func readString(Offset offset: UInt64?, StringEncoding encoding: String.Encoding, IsPeek peek: Bool) throws -> String
+    func readHexString(ByteCountToRead length: UInt64, Offset offset: UInt64?, IsPeek peek: Bool) throws -> String
     
     var byteOrder: Endianness { get }
     var offset: UInt64 { get }
@@ -71,5 +72,17 @@ extension Reader {
     
     func readString(Offset offset: UInt64, StringEncoding encoding: String.Encoding) throws -> String {
         return try readString(Offset: offset, StringEncoding: encoding, IsPeek: false)
+    }
+    
+    func readHexString(ByteCountToRead length: UInt64) throws -> String {
+        return try readString(Offset: offset, StringEncoding: String.Encoding.utf8, IsPeek: false)
+    }
+    
+    func readHexString(ByteCountToRead length: UInt64, IsPeek peek: Bool) throws -> String {
+        return try readString(Offset: offset, StringEncoding: String.Encoding.utf8, IsPeek: peek)
+    }
+    
+    func readHexString(ByteCountToRead length: UInt64, Offset offset: UInt64) throws -> String {
+        return try readString(ByteCountToRead length: UInt64, Offset: offset, StringEncoding: encoding, IsPeek: false)
     }
 }

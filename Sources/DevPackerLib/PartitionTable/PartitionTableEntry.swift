@@ -13,9 +13,9 @@ public struct PartitionTableEntry: Codable {
     
     var type: PartitionType
     
-    var size: UInt64
-    
     var offset: UInt64
+    
+    var partition: PartitionHeader? = nil
     
     public init(File reader: Reader) throws {
         let baseOffset = reader.offset
@@ -23,8 +23,11 @@ public struct PartitionTableEntry: Codable {
         type = PartitionType.Parse(Value: partitionName)
         
         try reader.seek(Offset: baseOffset + 0x20)
-        size = try reader.readInteger()
-        offset = size + 0x20000
+        offset = try reader.readInteger() << 0xF
         try reader.seek(Offset: reader.offset + 0x5C)
+    }
+    
+    internal func parsePartition(File reader: Reader) throws {
+        
     }
 }

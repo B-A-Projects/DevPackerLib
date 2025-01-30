@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum ReadError: Error {
+public enum ReadError: Error {
     case Uninitialized
     case FileInitFailed
     case InvalidOffset(Offset: UInt64, Length: UInt64)

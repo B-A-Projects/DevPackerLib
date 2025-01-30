@@ -55,20 +55,24 @@ public struct FileSystemTableEntry: Codable {
     /// **`Folder`**.
     public var subEntries: [FileSystemTableEntry]?
     
+    private var _offset: UInt64 = 0
+    private var _byteSize: UInt64 = 0
+    
     public init(File reader: Reader,
                 EntryListOffset entryListOffset: UInt64,
-                NameTableOffset nameTableOffset: UInt64
+                NameTableOffset nameTableOffset: UInt64,
+                DefaultName defaultName: String? = nil
     ) throws {
         index = UInt32((reader.offset - entryListOffset) / 0x10)
         type = FileSystemTableEntryType.Parse(Value: try reader.readInteger())
         nameOffset = try reader.readInteger(Offset: reader.offset + 0x1)
-        self.offset = try reader.readInteger()
-        byteSize = try reader.readInteger()
+        _offset = UInt64(try reader.readInteger() as UInt32)
+        _byteSize = UInt64(try reader.readInteger() as UInt32)
         flags = try reader.readInteger()
         groupHeaderIndex = try reader.readInteger()
         
         let nameTableEntry = try reader.readString(Offset: nameTableOffset + UInt64(nameOffset), IsPeek: true)
-        name = nameTableEntry.count > 0 ? nameTableEntry : "root"
+        name = nameTableEntry.count > 0 ? nameTableEntry : defaultName ?? "root"
         
         if type.Value == FileSystemTableEntryType.Folder.Value {
             subEntries = []
@@ -102,25 +106,28 @@ public struct FileSystemTableEntry: Codable {
     
     /// Extracts a file or folder from the
     /// associated content chunks in the
-    /// provided directory. **This function is used 
-    /// for extracting files and folders from 
+    /// provided directory. **This function is used
+    /// for extracting files and folders from
     /// CDN content.**
     ///
     /// - Parameters:
-    ///     - BaseDirectory: The directory URL in which to extract the 
+    ///     - BaseDirectory: The directory URL in which to extract the
     ///     content.
     ///     - ContentChunks: The list of **`MetadataContentChunk
-    ///     Entry`** records from which to extract the 
+    ///     Entry`** records from which to extract the
     ///     files.
-    public func extract(BaseDirectory directory: URL,
-                        FileData file: [UInt8]?
+    public func extract(DestinationUrl destination: URL,
+                        getFile: (_ index: UInt32,
+                                  _ offset: UInt64,
+                                  _ length: UInt64)
+                        throws -> [UInt8]
     ) throws {
         switch type {
         case .File:
-            try extractFile(BaseDirectory: directory, FileData: file)
+            try extractFile(DestinationUrl: destination, getFile: getFile)
             break
         case .Folder:
-            try extractFolder(BaseDirectory: directory)
+            try extractFolder(DestinationUrl: destination, getFile: getFile)
             break
         case .DeletedFile:
             break
@@ -131,29 +138,32 @@ public struct FileSystemTableEntry: Codable {
         }
     }
     
-    private func extractFolder(BaseDirectory directory: URL
+    private func extractFolder(DestinationUrl destination: URL,
+                               getFile: (_ index: UInt32,
+                                         _ offset: UInt64,
+                                         _ length: UInt64)
+                               throws -> [UInt8]
     ) throws {
-        let folderDirectory = directory.append(Component: name)
+        let folderDirectory = destination.append(Component: name)
         if !folderDirectory.directoryExists() {
             try FileManager.default.createDirectory(at: folderDirectory,
                                                     withIntermediateDirectories: false)
         }
         
-//        try subEntries?.forEach {
-//            try $0.extract(BaseDirectory: folderDirectory,
-//            FileData: file)
-//        }
+        try subEntries?.forEach {
+            try $0.extract(DestinationUrl: folderDirectory, getFile: getFile)
+        }
     }
     
-    private func extractFile(BaseDirectory directory: URL,
-                             FileData file: [UInt8]?
+    private func extractFile(DestinationUrl destination: URL,
+                             getFile: (_ index: UInt32,
+                                       _ offset: UInt64,
+                                       _ length: UInt64)
+                             throws -> [UInt8]
     ) throws {
-        guard file != nil else {
-            //TODO: Add proper error here
-            throw ReadError.InvalidValue
-        }
+        let fileData: [UInt8] = try getFile(index, _offset, _byteSize)
         
-        let fileDirectory = directory.append(Component: name)
+        let fileDirectory = destination.append(Component: name)
         if fileDirectory.fileExists() {
             try FileManager.default.removeItem(at: fileDirectory)
         }

@@ -10,120 +10,32 @@ import CryptoSwift
 
 public struct FileSystemTableGroupHeader: Codable {
     
-    var index: UInt32
+    public var index: UInt16 { get { return 0 } }
     
-    var name: String?
+    public var groupOffset: UInt64 { get { return _groupOffset }}
     
-    var directory: URL?
+    public var groupSize: UInt64 { get { return _groupSize } }
     
-    var sectorOffset: UInt32
+    public var flags: UInt16 { get { return _flags } }
     
-    var sectorSize: UInt32
+    public var hasHashTree: Bool { return (flags & 0x440) != 0 }
     
-    var ownerTitleId: UInt64
-    
-    var groupId: UInt16
-    
-    var flags: UInt16
-    
-    var isSystem: Bool
+    private var _index: UInt16 = 0
+    private var _groupOffset: UInt64 = 0
+    private var _groupSize: UInt64 = 0
+    private var _ownerTitleId: UInt64 = 0
+    private var _groupId: UInt32 = 0
+    private var _flags: UInt16 = 0
     
     public init(File reader: Reader,
-                Index index: UInt32,
-                IsSystemPartition isSystem: Bool,
-                DirectoryPath path: URL?
+                Index index: UInt16
     ) throws {
-        self.index = index
-        self.isSystem = isSystem
-        if directory != nil {
-            directory = path
-            let indexString = String(format:"%02X", index)
-            name = String(repeating: "0", count: 8 - indexString.count) + indexString
-        }
-        
-        sectorOffset = try reader.readInteger()
-        sectorSize = try reader.readInteger()
-        ownerTitleId = try reader.readInteger()
-        groupId = try reader.readInteger()
-        flags = try reader.readInteger()
-        try reader.seek(Offset: reader.offset + 0xC)
-    }
-    
-    public func Read(FileOffset offset: UInt64,
-                     FileLength length: UInt64,
-                     File reader: Reader?,
-                     DecryptionKey key: [UInt8]?
-    ) throws -> [UInt8] {
-        var chunkReader: Reader
-        if reader != nil {
-            chunkReader = reader!
-        } else if directory != nil {
-            chunkReader = try BinaryReader(Order: .BigEndian, Path: directory!.append(Component: "\(name!).app"))
-        } else {
-            throw ReadError.FileNotFound
-        }
-        
-        var file: [UInt8] = []
-        if key != nil {
-            file = try decrypt(File: chunkReader, DecryptionKey: key!, FileOffset: offset, FileLength: length)
-        } else {
-            try chunkReader.seek(Offset: offset)
-            file = try chunkReader.readUnsignedByteArray(ByteCountToRead: length)
-        }
-        return file
-    }
-    
-    public func decrypt(File reader: Reader,
-                        DecryptionKey key: [UInt8],
-                        FileOffset offset: UInt64,
-                        FileLength length: UInt64
-    ) throws -> [UInt8] {
-        if flags & 0x440 != 0 {
-            return try decryptHashTreeChunk(File: reader,
-                                            DecryptionKey: key,
-                                            FileOffset: offset,
-                                            FileLength: length)
-        }
-        return try decryptRegularChunk(File: reader,
-                                       DecryptionKey: key,
-                                       FileOffset: offset,
-                                       FileLength: length)
-    }
-    
-    private func decryptHashTreeChunk(File reader: Reader,
-                                      DecryptionKey key: [UInt8],
-                                      FileOffset offset: UInt64,
-                                      FileLength length: UInt64
-    ) throws -> [UInt8] {
-        return []
-    }
-    
-    private func decryptRegularChunk(File reader: Reader,
-                                     DecryptionKey key: [UInt8],
-                                     FileOffset offset: UInt64,
-                                     FileLength length: UInt64
-    ) throws -> [UInt8] {
-        let groupOffset = reader.offset + UInt64(sectorOffset * 0x8000)
-        try reader.seek(Offset: groupOffset)
-        let data = try reader.readUnsignedByteArray(ByteCountToRead: UInt64(sectorSize * 0x8000))
-        
-        var iv = Array.init(repeating: UInt8(0), count: 16)
-        if isSystem {
-            let sectorIndex = (groupOffset - 0x10000) / 0x10000
-            for index in 0...7 {
-                iv[15 - index] = UInt8((groupOffset >> (index * 8)) & 0xFF)
-            }
-        } else {
-            for index in 0...1 {
-                iv[1 - index] = UInt8((self.index >> (index * 8)) & 0xFF)
-            }
-        }
-        
-        let decryptor = try AES(key: key, blockMode: CBC(iv: iv), padding: .noPadding)
-        let decryptedData = try decryptor.decrypt(data)
-        
-        let memoryReader = try MemoryReader(From: data, ByteOrder: .BigEndian)
-        try memoryReader.seek(Offset: offset)
-        return try memoryReader.readUnsignedByteArray(ByteCountToRead: length, Offset: 0, IsPeek: false)
+        _index = index
+        _groupOffset = UInt64(try reader.readInteger() as UInt32) * 0x8000
+        _groupSize = UInt64(try reader.readInteger() as UInt32) * 0x8000
+        _ownerTitleId = try reader.readInteger()
+        _groupId = try reader.readInteger()
+        _flags = try reader.readInteger()
+        try reader.seek(Offset: reader.offset + 0xA)
     }
 }

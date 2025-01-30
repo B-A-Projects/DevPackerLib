@@ -158,6 +158,14 @@ public class BinaryReader: Reader {
         return String()
     }
     
+    public func readHexString(ByteCountToRead length: UInt64,
+                              Offset offset: UInt64?,
+                              IsPeek peek: Bool)
+    throws -> String {
+        return try readUnsignedByteArray(ByteCountToRead: length, Offset: offset, IsPeek: peek)
+            .map{ String(format:"%02X", $0) }.joined(separator: " ")
+    }
+    
     private func read(ByteCountToRead length: UInt64, Offset offset: UInt64? = nil, IsPeek isPeek: Bool = false) throws -> [UInt8]? {
         guard _fileHandle != nil else {
             throw ReadError.Uninitialized
