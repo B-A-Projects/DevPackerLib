@@ -25,14 +25,14 @@ public struct Signature: Codable {
     /// signed this title metadata file.
     var signer: String
     
-    public init (File fileHandle: Reader) throws {
-        signatureType = SignatureType.Parse(Value: try fileHandle.readInteger(ByteOrder: .LittleEndian, Offset: nil, IsPeek: false))
-        signature = try fileHandle.readUnsignedByteArray(ByteCountToRead: 0x100, Offset: nil, IsPeek: false)
+    public init (File reader: Reader) throws {
+        signatureType = SignatureType.Parse(Value: try reader.readInteger())
+        signature = try reader.readUnsignedByteArray(ByteCountToRead: 0x100)
         
-        try fileHandle.seek(Offset: fileHandle.offset + 0x3C);
-        let signerOffset = fileHandle.offset
-        signer = try fileHandle.readString(Offset: nil, StringEncoding: String.Encoding.utf8, IsPeek: false)
+        try reader.seek(Offset: reader.offset + 0x3C);
+        let signerOffset = reader.offset
+        signer = try reader.readString()
         
-        try fileHandle.seek(Offset: signerOffset + 0x40)
+        try reader.seek(Offset: signerOffset + 0x40)
     }
 }

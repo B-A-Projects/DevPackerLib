@@ -75,14 +75,14 @@ extension Reader {
     }
     
     func readHexString(ByteCountToRead length: UInt64) throws -> String {
-        return try readString(Offset: offset, StringEncoding: String.Encoding.utf8, IsPeek: false)
+        return try readHexString(ByteCountToRead: length, Offset: nil, IsPeek: false)
     }
     
     func readHexString(ByteCountToRead length: UInt64, IsPeek peek: Bool) throws -> String {
-        return try readString(Offset: offset, StringEncoding: String.Encoding.utf8, IsPeek: peek)
+        return try readHexString(ByteCountToRead: length, Offset: nil, IsPeek: peek)
     }
     
     func readHexString(ByteCountToRead length: UInt64, Offset offset: UInt64) throws -> String {
-        return try readString(ByteCountToRead length: UInt64, Offset: offset, StringEncoding: encoding, IsPeek: false)
+        return try readHexString(ByteCountToRead: length, Offset: offset, IsPeek: false)
     }
 }

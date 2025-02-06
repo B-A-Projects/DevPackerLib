@@ -18,12 +18,9 @@ public struct Ticket: Codable {
     
     var secondaryHeaderEntries: [TicketSecondaryHeaderEntry]
     
-    init(DirectoryUrl url: URL) throws {
-        let ticketUrl = url.append(Component: "title.tik")
-        
-        let reader = try BinaryReader(Order: .BigEndian, Path: ticketUrl)
+    init(File reader: Reader, DecryptionKey key: [UInt8]) throws {
         signature = try Signature(File: reader)
-        primaryHeader = try TicketPrimaryHeader(File: reader)
+        primaryHeader = try TicketPrimaryHeader(File: reader, DecryptionKey: key)
         secondaryHeader = try TicketSecondaryHeader(File: reader)
         
         secondaryHeaderEntries = []
@@ -31,17 +28,5 @@ public struct Ticket: Codable {
         for index in 0...secondaryHeader.subheaderCount {
             secondaryHeaderEntries.insert(try TicketSecondaryHeaderEntry(File: reader, SecondaryHeaderOffset: offset), at: Int(index))
         }
-    }
-    
-    public func getDecryptionKey(DecryptionKey key: [UInt8]) throws -> [UInt8] {
-        var iv = Array.init(repeating: UInt8(0), count: 16)
-        for index in 0...7 {
-            iv[7 - index] = UInt8((primaryHeader.titleId >> (index * 8)) & 0xFF)
-        }
-        
-        let encryptor = try AES(key: key,                                    
-                                blockMode: CBC(iv: iv),
-                                padding: .noPadding)
-        return try encryptor.decrypt(primaryHeader.titleKey)
     }
 }

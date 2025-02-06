@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum PartitionType: Codable {
+public enum PartitionType: Codable, Comparable {
     case System
     case Update
     case Game

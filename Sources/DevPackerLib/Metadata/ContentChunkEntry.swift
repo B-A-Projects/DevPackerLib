@@ -17,11 +17,6 @@ public struct MetadataContentChunkEntry : Codable {
     /// The name of the file this entry represents.
     var chunkFileName: String
     
-    /// The URL at which the chunk file or 
-    /// associated hash file can be found. This
-    /// value is only used for CDN packages.
-    var chunkFileUrl: URL?
-    
     /// The zero-based index of this entry in the
     /// list of chunk entries.
     var index: UInt16
@@ -59,10 +54,9 @@ public struct MetadataContentChunkEntry : Codable {
     ///       which the content chunk can be found.
     ///     - File: The filehandle currently processing the 
     ///       metadata file this chunk is a part of.
-    init (File fileHandle: Reader, DirectoryUrl url: URL?) throws {
+    init (File fileHandle: Reader) throws {
         let name = String(format:"%02X", try fileHandle.readInteger() as UInt32)
         chunkFileName = String(repeating: "0", count: 8 - name.count) + name
-        chunkFileUrl = url//.append(Component: chunkFileName)
         index = try fileHandle.readInteger()
         flags = MetadataContentChunkFlags.Parse(Value: try fileHandle.readInteger())
         size = try fileHandle.readInteger()

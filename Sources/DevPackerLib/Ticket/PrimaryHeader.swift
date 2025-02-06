@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import CryptoSwift
 
 public struct TicketPrimaryHeader: Codable {
     
@@ -14,6 +15,8 @@ public struct TicketPrimaryHeader: Codable {
     var ticketVersion: UInt8
     
     var titleKey: [UInt8]
+    
+    var decryptedTitleKey: [UInt8]
     
     var ticketId: UInt64
     
@@ -35,7 +38,7 @@ public struct TicketPrimaryHeader: Codable {
     
     var permissions: [UInt8]
     
-    public init(File reader: Reader) throws {
+    public init(File reader: Reader, DecryptionKey key: [UInt8]) throws {
         ecdhData = try reader.readUnsignedByteArray(ByteCountToRead: 0x3C)
         ticketVersion = try reader.readInteger()
         titleKey = try reader.readUnsignedByteArray(ByteCountToRead: 0x10, Offset: reader.offset + 0x2)
@@ -49,5 +52,16 @@ public struct TicketPrimaryHeader: Codable {
         commonKeyType = try reader.readInteger()
         data = try reader.readUnsignedByteArray(ByteCountToRead: 0x30)
         permissions = try reader.readUnsignedByteArray(ByteCountToRead: 0x40)
+        
+        
+        var iv = Array.init(repeating: UInt8(0), count: 16)
+        for index in 0...7 {
+            iv[7 - index] = titleId[7 - index]
+        }
+            
+        let encryptor = try AES(key: key,
+                                blockMode: CBC(iv: iv),
+                                padding: .noPadding)
+        decryptedTitleKey = try encryptor.decrypt(titleKey)
     }
 }

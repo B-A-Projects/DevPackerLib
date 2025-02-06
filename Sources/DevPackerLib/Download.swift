@@ -9,58 +9,100 @@
 import Foundation
 import CryptoSwift
 
-struct Download: WiiUGame {
+public struct Download: Game {
     
-    public var titleKey: String
+    public var name: String { get { return _name } }
     
-    public var name: String
+    public var consoleType: ConsoleType { get { return _consoleType } }
     
-    public var consoleType: ConsoleType
+    public var mediaType: MediaType { get { return _mediaType } }
     
-    public var mediaType: MediaType
+    public var partitions: [Partition] { get { return _partitions } }
     
-    public var partitions: [Partition]
+    public var directoryUrl: URL { get { return _directoryUrl } }
     
-    public init(Directory url: URL, TitleKey key: String, ConsoleType type: ConsoleType) throws {
-        mediaType = .Disc
-        consoleType = type
-        titleKey = key
+    private var _name: String
+    private var _directoryUrl: URL
+    private var _consoleType: ConsoleType
+    private var _mediaType: MediaType
+    private var _partitions: [VirtualPartition] = []
+    
+    private var _titleKey: [UInt8]
+    private var _commonKey: [UInt8]
+    
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: GameKeys.self)
+        _name = try container.decode(String.self, forKey: .name)
+        _directoryUrl = try container.decode(URL.self, forKey: .directoryUrl)
+        _consoleType = try container.decode(ConsoleType.self, forKey: .consoleType)
+        _mediaType = try container.decode(MediaType.self, forKey: .mediaType)
+        _partitions = try container.decode([VirtualPartition].self, forKey: .partitions)
+        _titleKey = try container.decode([UInt8].self, forKey: .titleKey)
+        _commonKey = try container.decode([UInt8].self, forKey: .commonKey)
         
-        let wudUrl = url.append(Component: "game.wud")
-        guard wudUrl.fileExists() else {
-            throw ReadError.FileNotFound
-        }
-        
-        var reader = try BinaryReader(Order: .BigEndian, Path: wudUrl)
-        name = try reader.readString()
-        
-        var tableReader: Reader
-        if try reader.readInteger(Offset: 0x18000) as UInt32 == 0xCCA6E67B {
-            var tableBytes = try reader.readUnsignedByteArray(ByteCountToRead: 0x8000, Offset: 0x18000)
-            tableReader = try MemoryReader(From: tableBytes, ByteOrder: .BigEndian)
-            consoleType = ConsoleType.Development
-        } else {
-            var tableBytes = try reader.readUnsignedByteArray(ByteCountToRead: 0x8000, Offset: 0x18000)
-            var decryptor = try AES(key: titleKey, iv: String(repeating: "0", count: 0x10), padding: .noPadding)
-            tableReader = try MemoryReader(From: try decryptor.decrypt(tableBytes), ByteOrder: .BigEndian)
-            consoleType = ConsoleType.Retail
-        }
-        
-        guard try tableReader.readInteger() == 0xCCA6E67B else {
-            throw ReadError.InvalidValue
-        }
-        
-        let headerSize: UInt32 = try tableReader.readInteger()
-        
-        try tableReader.seek(Offset: tableReader.offset + 0x14)
-        let partitionCount = try tableReader.readInteger() as UInt32
-        
-        partitions = []
-        try tableReader.seek(Offset: tableReader.offset + 0x7E0)
-        for index in 0...partitionCount {
-            partitions.insert(try DiscPartition(File: tableReader), at: Int(index))
+        for index in 0..._partitions.count - 1 {
+            _partitions[index]._getDirectoryUrl = GetDirectoryUrl
         }
     }
     
+    public init(Directory url: URL,
+                TitleKey titleKey: [UInt8],
+                CommonKey commonKey: [UInt8],
+                ConsoleType type: ConsoleType
+    ) throws {
+        _directoryUrl = url
+        _mediaType = .Disc
+        _consoleType = type
+        _titleKey = titleKey
+        _commonKey = commonKey
+        
+        let ticketUrl = url.append(Component: "title.tik")
+        let metadataUrl = url.append(Component: "title.tmd")
+        let signatureUrl = url.append(Component: "title.cert")
+        guard ticketUrl.fileExists() && metadataUrl.fileExists() && signatureUrl.fileExists() else {
+            throw ReadError.FileNotFound
+        }
+        
+        let signature = try Signature(File: try BinaryReader(Order: .BigEndian,
+                                                             Path: signatureUrl))
+        let ticket = try Ticket(File: try BinaryReader(Order: .BigEndian,
+                                                       Path: ticketUrl),
+                                DecryptionKey: _commonKey)
+        let metadata = try Metadata(File: try BinaryReader(Order: .BigEndian,
+                                                           Path: metadataUrl))
+        
+        _name = "\(ticket.primaryHeader.titleId.toHexString()) (digital)"
+        _partitions.insert(try VirtualPartition(DirectoryUrl: url,
+                                                Ticket: ticket,
+                                                Metadata: metadata,
+                                                CertificateChain: signature,
+                                                GetDirectoryUrl: GetDirectoryUrl),
+                           at: 0)
+    }
     
+    public func extract(DestinationUrl url: URL,
+                        PartitionIndex partitionIndex: UInt32,
+                        FilesystemTableIndex filesystemTableIndex: UInt32
+     ) throws {
+        guard partitionIndex < _partitions.count else {
+            throw ReadError.InvalidValue
+        }
+        try _partitions[Int(partitionIndex)].extract(DestinationUrl: url,
+                                                     FilesystemTableIndex: filesystemTableIndex)
+     }
+    
+    private func GetDirectoryUrl() -> URL {
+        return directoryUrl
+    }
+    
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: GameKeys.self)
+        try container.encode(_name, forKey: .name)
+        try container.encode(_directoryUrl, forKey: .directoryUrl)
+        try container.encode(_consoleType, forKey: .consoleType)
+        try container.encode(_mediaType, forKey: .mediaType)
+        try container.encode(_partitions, forKey: .partitions)
+        try container.encode(_titleKey, forKey: .titleKey)
+        try container.encode(_commonKey, forKey: .commonKey)
+    }
 }

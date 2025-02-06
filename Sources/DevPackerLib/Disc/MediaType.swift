@@ -9,8 +9,8 @@ import Foundation
 
 /// Represents the type of disc.
 ///
-/// The disc may be one of two types: **Retail**
-/// and **Development**.
+/// The disc may be one of two types: **Disc**
+/// and **Digital**.
 ///
 /// Any value that does not conform to this
 /// type selection is given the **unknown**
@@ -37,23 +37,22 @@ public enum MediaType: Codable {
         }
     }
     
-    /// Returns the type of file system entry based on the
-    /// identifier provided in `value`.
+    /// Returns the type of media the video game
+    /// was sourced from, based on the identifier
+    /// provided in `value`.
     ///
     /// This function will result in one of five results, depending
     /// on the provided input. Possible results are:
-    /// - **`0x00`**: Represents a folder
-    /// - **`0x01`**: Represents a file
-    /// - **`0x80`**: Represents a deleted folder
-    /// - **`0x81`**: Represents a deleted file
+    /// - **`0x00`**: Represents a disc-based game
+    /// - **`0x01`**: Represents a digital game
     ///
     /// Any other value will result in
-    /// `FileSystemTableEntryType.Unknown`
+    /// `MediaType.Unknown`
     ///
     /// - Parameters:
     ///     - Value: The value of which to determine the type.
     ///
-    /// - Returns: The `FileSystemTableEntryType` value for `value`.
+    /// - Returns: The `MediaType` value for `value`.
     static func Parse(Value value: UInt8) -> MediaType {
         switch value {
         case 0x00:

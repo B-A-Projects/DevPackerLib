@@ -18,7 +18,7 @@ import Foundation
 /// Any value that does not conform to this
 /// type selection is given the **unknown**
 /// file type instead.
-public enum FileSystemTableEntryType: Codable {
+public enum FileSystemTableEntryType: Codable, Comparable {
     case Folder
     case File
     case DeletedFolder

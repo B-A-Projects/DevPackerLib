@@ -23,10 +23,7 @@ public struct Metadata: Codable {
     /// Represents the list of content chunks that are related to this metadata file.
     var contentChunks: [MetadataContentChunkEntry]
     
-    init(DirectoryUrl url: URL) throws {
-        let metadataUrl = url.append(Component: "title.tmd")
-        
-        let reader = try BinaryReader(Order: .BigEndian, Path: metadataUrl)
+    init(File reader: Reader) throws {
         signature = try Signature(File: reader)
         header = try MetadataHeader(File: reader)
         
@@ -38,7 +35,7 @@ public struct Metadata: Codable {
         contentChunks = []
         let chunkCount = Int(contentGroups.map({ $0.chunkCount }).reduce(0, +));
         for index in 0...chunkCount - 1 {
-            contentChunks.insert(try MetadataContentChunkEntry(File: reader, DirectoryUrl: url), at: index)
+            contentChunks.insert(try MetadataContentChunkEntry(File: reader), at: index)
         }
     }
     

@@ -8,23 +8,24 @@
 import Foundation
 import CryptoSwift
 
-struct DiscPartition: Partition {
+public struct DiscPartition: Partition {
     
     public var partitionName: String { get { return _partitionName } }
     
     public var partitionType: PartitionType { get { return _partitionType } }
     
-    public var filesystemTable: FilesystemTable { get { return _filesystemTable } }
+    public var filesystemTable: FilesystemTable { get { return _filesystemTable! } }
     
     private var _partitionName: String
     private var _partitionType: PartitionType
-    private var _filesystemTable: FilesystemTable
-    private var _key: [UInt8]? = nil
-    
+    private var _partitionIndex: UInt32
     private var _partitionOffset: UInt64 = 0
-    private var _filesystemTableOffset: UInt64 = 0
     private var _partitionSize: UInt64 = 0
+    
+    private var _filesystemTableOffset: UInt64 = 0
     private var _filesystemTableSize: UInt64 = 0
+    private var _filesystemTable: FilesystemTable? = nil
+    
     private var _hashBlockSize: UInt32 = 0
     private var _hashCount: UInt32 = 0
     
@@ -32,82 +33,62 @@ struct DiscPartition: Partition {
     private var _metadata: Metadata? = nil
     private var _certificateChain: Signature? = nil
     
-    private var _getDirectoryUrl: () -> URL
+    private var _key: [UInt8]? = nil
     
-//    var partitionName: String
-//    
-//    var type: PartitionType
-//    
-//    var offset: UInt64
-//    
-//    var filesystemTableOffset: UInt64
-//    
-//    var partitionSize: UInt64
-//    
-//    var hashBlockSize: UInt32
-//    
-//    var hashCount: UInt32
-//    
-//    var filesystemTableSize: UInt32
+    internal var _getDirectoryUrl: () -> URL
+    internal var _getSystemFiles: (_ index: UInt32) throws -> (Signature, Ticket, Metadata)?
     
-    public init(PartitionType type: PartitionType,
-                DirectoryUrl url: URL,
-                DecryptionKey key: [UInt8]? = nil,
-                Ticket ticket: Ticket? = nil,
-                Metadata metadata: Metadata? = nil,
-                CertificateChain certificateChain: Signature? = nil
-    ) throws {
-        _partitionType = type
-        _ticket = ticket
-        _metadata = metadata
-        _certificateChain = certificateChain
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: PartitionKeys.self)
+        _partitionName = try values.decodeIfPresent(String.self, forKey: .partitionName) ?? "default"
+        _partitionIndex = try values.decodeIfPresent(UInt32.self, forKey: .partitionIndex) ?? 0
+        _partitionType = try values.decodeIfPresent(PartitionType.self, forKey: .partitionType) ?? .Game
+        _partitionOffset = try values.decodeIfPresent(UInt64.self, forKey: .partitionSize) ?? 0
+        _partitionSize = try values.decodeIfPresent(UInt64.self, forKey: .partitionSize) ?? 0
         
-        switch type {
-        case .System:
-            _partitionName = type.Value
-            _filesystemTable = try VirtualFilesystemTable()
-        case .Game:
-            guard key != nil && _ticket != nil && _metadata != nil else {
-                throw ReadError.Uninitialized
-            }
-            _partitionName = "GM\(_ticket!.primaryHeader.titleId.toHexString())000000000000"
-            _key = try _ticket!.getDecryptionKey(DecryptionKey: key!)
-            
-            let filesystemUrl = url.append(Component: "\(metadata!.contentChunks[0].chunkFileName).app")
-            guard filesystemUrl.fileExists() else {
-                throw ReadError.FileNotFound
-            }
-            let fileReader = try BinaryReader(Order: .BigEndian, Path: filesystemUrl)
-            let encryptedFilesystemTable = try fileReader.readUnsignedByteArray(ByteCountToRead: fileReader.length)
-            
-            let aes = try AES(key: _key!,
-                              blockMode: CBC(iv: Array(repeating: 0, count: 0x10)),
-                              padding: .noPadding)
-            var memoryReader = try MemoryReader(From: aes.decrypt(encryptedFilesystemTable),
-                                                ByteOrder: .BigEndian)
-            _filesystemTable = try DiscFilesystemTable(PartitionName: _partitionName,
-                                                       File: memoryReader,
-                                                       DirectoryPath: url)
-        default:
-            throw ReadError.InvalidValue
-        }
+        _filesystemTableOffset = try values.decodeIfPresent(UInt64.self, forKey: .filesystemTableOffset) ?? 0
+        _filesystemTableSize = try values.decodeIfPresent(UInt64.self, forKey: .filesystemTableSize) ?? 0
+        _filesystemTable = try values.decodeIfPresent(FilesystemTable.self, forKey: .filesystemTable)!
+        
+        _hashBlockSize = try values.decodeIfPresent(UInt32.self, forKey: .hashBlockSize) ?? 0
+        _hashCount = try values.decodeIfPresent(UInt32.self, forKey: .hashCount) ?? 0
+        
+        _ticket = try values.decodeIfPresent(Ticket.self, forKey: .ticket)
+        _metadata = try values.decodeIfPresent(Metadata.self, forKey: .metadata)
+        _certificateChain = try values.decodeIfPresent(Signature.self, forKey: .signature)
+        
+        _key = try values.decodeIfPresent([UInt8].self, forKey: .key)
+        
+        _getDirectoryUrl = { URL(fileURLWithPath: "/") }
+        _getSystemFiles =  { partitionIndex in return nil }
+        
+        _filesystemTable!._getGroup = getGroup(Group:FileOffset:FileSize:)
     }
     
     public init(File reader: Reader,
-                DecryptionKey key: [UInt8]? = nil,
-                Ticket ticket: Ticket? = nil,
-                Metadata metadata: Metadata? = nil,
-                CertificateChain certificateChain: Signature? = nil
+                PartitionIndex index: UInt32,
+                GetSystemFiles: @escaping (_ partitionIndex: UInt32) throws -> (Signature, Ticket, Metadata)?,
+                GetDirectoryUrl: @escaping () -> URL,
+                DecryptionKey key: [UInt8]? = nil
     ) throws {
-        _key = key
-        _ticket = ticket
-        _metadata = metadata
-        _certificateChain = certificateChain
-        
         // Read out the partition table entry
         let baseOffset = reader.offset
         _partitionName = try reader.readString()
-        _partitionType = PartitionType.Parse(Value: partitionName)
+        _partitionType = PartitionType.Parse(Value: _partitionName)
+        _partitionIndex = index
+        _getSystemFiles = GetSystemFiles
+        _getDirectoryUrl = GetDirectoryUrl
+        
+        switch _partitionType {
+        case .Game:
+            let systemFiles = try GetSystemFiles(_partitionIndex)
+            _certificateChain = systemFiles?.0
+            _ticket = systemFiles?.1
+            _metadata = systemFiles?.2
+        default:
+            _key = key
+        }
+        _key = key
         
         try reader.seek(Offset: baseOffset + 0x20)
         let offsetValue = try reader.readInteger<UInt32>() as UInt64
@@ -129,61 +110,63 @@ struct DiscPartition: Partition {
         _filesystemTableSize = try reader.readInteger<UInt32>() as UInt64
         
         // Parse the filesystem table
-        let encryptedFilesystemTable = try reader.readUnsignedByteArray(ByteCountToRead: _filesystemTableSize,
-                                                                         Offset: _filesystemTableOffset)
+        let filesystemTable = try reader.readUnsignedByteArray(ByteCountToRead: _filesystemTableSize,
+                                                               Offset: _filesystemTableOffset)
         
         if _key != nil {
-            guard _ticket != nil else {
-                throw ReadError.Uninitialized
-            }
-            
             let aes = try AES(key: _key!,
                               blockMode: CBC(iv: Array(repeating: 0, count: 0x10)),
                               padding: .noPadding)
-            var memoryReader = try MemoryReader(From: aes.decrypt(encryptedFilesystemTable),
+            var memoryReader = try MemoryReader(From: aes.decrypt(filesystemTable),
                                                 ByteOrder: .BigEndian)
-            _filesystemTable = try DiscFilesystemTable(PartitionName: _partitionName,
-                                                       File: memoryReader,
-                                                       DirectoryPath: url)
-
+            _filesystemTable = try FilesystemTable(File: memoryReader,
+                                                   FilesystemTableOffset: 0,
+                                                   FilesystemTableSize: _filesystemTableSize,
+                                                   PartitionName: _partitionName,
+                                                   GetGroup: getGroup(Group:FileOffset:FileSize:),
+                                                   DecryptionKey: nil)
+        } else {
+            var memoryReader = try MemoryReader(From: filesystemTable,
+                                                ByteOrder: .BigEndian)
+            _filesystemTable = try FilesystemTable(File: memoryReader,
+                                                   FilesystemTableOffset: 0,
+                                                   FilesystemTableSize: _filesystemTableSize,
+                                                   PartitionName: _partitionName,
+                                                   GetGroup: getGroup(Group:FileOffset:FileSize:),
+                                                   DecryptionKey: _ticket?.primaryHeader.decryptedTitleKey ?? nil)
         }
         
         try reader.seek(Offset: baseOffset + 0x80)
     }
     
-    public func Extract(SourceUrl source: URL,
-                        DestinationUrl destination: URL,
-                        FilesystemTableIndex filesystemTableIndex: UInt32,
-                        DecryptionKey key: [UInt8]? = nil
-    ) throws {
-        let tableEntry = _filesystemTable.entryTable.getEntry(Index: filesystemTableIndex)
-        guard tableEntry != nil else {
-            throw ReadError.FileNotFound
-        }
-        
-        let wudUrl = source.append(Component: "game.wud")
-        guard wudUrl.fileExists() else {
-            throw ReadError.FileNotFound
-        }
-        
-        var partitionReader: Reader = try BinaryReader(Order: .BigEndian,
-                                             Path: wudUrl)
-        if key != nil {
-            let aes = try AES(key: _key!,
-                              blockMode: CBC(iv: Array(repeating: 0, count: 0x10)),
-                              padding: .noPadding)
-            partitionReader = try MemoryReader(From: aes.decrypt(partitionReader.readUnsignedByteArray(ByteCountToRead: _partitionSize,
-                                                                                                       Offset: _partitionOffset)),
-                                               ByteOrder: .BigEndian)
-        } else {
-            partitionReader = try MemoryReader(From: partitionReader.readUnsignedByteArray(ByteCountToRead: _partitionOffset,
-                                                                                           Offset: _partitionSize),
-                                               ByteOrder: .BigEndian)
-        }
-        
+    public func extract(DestinationUrl destination: URL?,
+                                 FilesystemTableIndex filesystemTableIndex: UInt32
+    ) throws -> [UInt8]? {
+        return try _filesystemTable!.Extract(FilesystemTableIndex: filesystemTableIndex,
+                                             DestinationUrl: destination)
     }
     
-    private func getChunk(Group groupEntry: FileSystemTableGroupHeader,
+    /// Reads a specified range of bytes at the
+    /// offset in the `FileSystemTableGroupHeader`
+    /// entry provided.
+    ///
+    /// This function reads a specified range of
+    /// bytes at an offset relative to the starting
+    /// position of the `FileSystemTableGroupHeader`
+    /// in this partition.
+    ///
+    /// If the `_key` property is set, decryption is
+    /// performed on the partition level.
+    ///
+    /// - Parameters:
+    ///     - Group: The `FileSystemTableGroupHeader` entry in which the file to be extracted is located.
+    ///     - FileOffset: 0-based offset at which the file is located within the partition.
+    ///     - FileSize: The total size of the file to be extracted, in bytes. For files in groups using hash trees, this number should be the total size of sectors in bytes.
+    ///
+    /// - Returns: An `UInt8` array containing the specified
+    /// range of bytes from the specified
+    /// `FileSystemTableGroupHeader` entry.
+    private func getGroup(Group groupEntry: FileSystemTableGroupHeader,
                           FileOffset fileOffset: UInt64,
                           FileSize fileSize: UInt64
     ) throws -> [UInt8] {
@@ -202,11 +185,45 @@ struct DiscPartition: Partition {
                                                                    Offset: absoluteOffset)
         
         if _key != nil {
+            var iv = Array.init(repeating: UInt8(0), count: 16)
+            if _partitionType == .System {
+                let sectorIndex = UInt16((fileOffset - 0x10000) / 0x10000)
+                for index in 0...1 {
+                    iv[15 - index] = UInt8((sectorIndex >> (index * 8)) & 0xFF)
+                }
+            } else {
+                for index in 0...1 {
+                    iv[1 - index] = UInt8((groupEntry.index >> (index * 8)) & 0xFF)
+                }
+            }
+            
             let aes = try AES(key: _key!,
                               blockMode: CBC(iv: Array(repeating: 0, count: 0x10)),
                               padding: .noPadding)
             return try aes.decrypt(Array(chunkBytes[Int(encryptionOffset)...]))
         }
         return chunkBytes
+    }
+    
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: PartitionKeys.self)
+        try container.encode(_partitionName, forKey: .partitionName)
+        try container.encode(_partitionIndex, forKey: .partitionIndex)
+        try container.encode(_partitionType, forKey: .partitionType)
+        try container.encode(_partitionOffset, forKey: .partitionOffset)
+        try container.encode(_partitionSize, forKey: .partitionSize)
+        
+        try container.encode(_filesystemTableOffset, forKey: .filesystemTableOffset)
+        try container.encode(_filesystemTableSize, forKey: .filesystemTableSize)
+        try container.encode(_filesystemTable, forKey: .filesystemTable)
+        
+        try container.encode(_hashBlockSize, forKey: .hashBlockSize)
+        try container.encode(_hashCount, forKey: .hashCount)
+        
+        try container.encodeIfPresent(_ticket, forKey: .ticket)
+        try container.encodeIfPresent(_metadata, forKey: .metadata)
+        try container.encodeIfPresent(_certificateChain, forKey: .signature)
+        
+        try container.encodeIfPresent(_key, forKey: .key)
     }
 }
